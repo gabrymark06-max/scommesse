@@ -1,0 +1,33 @@
+# Chiama /cron del bot ogni 15 minuti (gratis sui repository pubblici).
+# L'indirizzo con il segreto sta nel secret CRON_URL del repository, mai nel codice.
+name: cron
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    - cron: "0 6 1 * *" # una volta al mese: commit di mantenimento (GitHub sospende i cron dopo 60 giorni senza attività)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tick:
+    if: github.event.schedule != '0 6 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: curl -fsS --max-time 180 "$CRON_URL"
+        env:
+          CRON_URL: ${{ secrets.CRON_URL }}
+
+  keepalive:
+    if: github.event.schedule == '0 6 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +%Y-%m-%d > .github/keepalive
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add .github/keepalive
+          git commit -m "keepalive" && git push || true
