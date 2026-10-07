@@ -84,7 +84,7 @@ def settle_bets(cfg, con, now):
     evs = {eid: _event_row(con, eid) for eid in ids}
 
     out = []
-    line = lambda e: f"{esc(e['home'])} {e['home_score']}-{e['away_score']} {esc(e['away'])}"
+    line = lambda e: f"⚽ {esc(e['home'])} <b>{e['home_score']}-{e['away_score']}</b> {esc(e['away'])}"
     for b in bets:
         legs = [(l, evs.get(l["eventId"])) for l in b["legs"]]
         ok = lambda l, e: all(holds(s, e["home_score"], e["away_score"]) for s in l["sels"])
@@ -93,14 +93,14 @@ def settle_bets(cfg, con, now):
             con.execute("UPDATE bets SET result = ? WHERE id = ?", ("won" if won else "lost", b["id"]))
             con.commit()
             money = f"+{eur(b['stake'] * (b['odds'] - 1))}" if won else f"−{eur(b['stake'])}"
-            out.append(f"📋 <b>B{b['id']} {'vinta ✅' if won else 'persa ❌'}</b> {money}\n" + ", ".join(line(e) for _, e in legs))
+            out.append(f"{'✅' if won else '❌'} <b>B{b['id']} {'VINTA' if won else 'PERSA'}</b>  {money}\n" + "\n".join(line(e) for _, e in legs))
             continue
         # multipla con una partita già persa: inutile aspettare le altre
         lost = next((e for l, e in legs if e and e["completed"] and not ok(l, e)), None)
         if lost:
             con.execute("UPDATE bets SET result = 'lost' WHERE id = ?", (b["id"],))
             con.commit()
-            out.append(f"📋 <b>B{b['id']} persa ❌</b> −{eur(b['stake'])}\n{line(lost)}")
+            out.append(f"❌ <b>B{b['id']} PERSA</b>  −{eur(b['stake'])}\n{line(lost)}")
             continue
         # risultato non trovato (partita rinviata o supplementari senza parziale): avviso una volta
         if any(e and not e["completed"] and now - e["commence"] > window(e["sport_key"]) for _, e in legs) and not db.kv_get(con, f"stale_bet:{b['id']}"):
@@ -109,5 +109,5 @@ def settle_bets(cfg, con, now):
     if out:
         pnl = con.execute("SELECT COALESCE(SUM(CASE result WHEN 'won' THEN stake * (odds - 1) WHEN 'lost' THEN -stake ELSE 0 END), 0) AS p "
                           "FROM bets WHERE result IS NOT NULL").fetchone()["p"]
-        out.append(f"Profitto totale registrato: <b>{eur(pnl)}</b>")
+        out.append(f"💰 Profitto totale: <b>{eur(pnl)}</b>")
     return out

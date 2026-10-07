@@ -1,5 +1,6 @@
 """Settimane di funzionamento simulate attraverso l'app web, con The Odds API, football-data.org e Telegram finti."""
 import json
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -126,7 +127,7 @@ def test_full_flow(w):
                {"key": "unibet_it", "h2h": [2.0, 3.3, 4.15]}, {"key": "codere_it", "h2h": [2.05, 3.25, 3.6]}]
     cron(w, T0)
     assert w.odds_calls == ["h2h"]
-    assert len(w.sent) == 1 and "OCCASIONE S1" in w.sent[0] and "Unibet paga <b>4,15</b>" in w.sent[0] and "2 (Juventus)" in w.sent[0]
+    assert len(w.sent) == 1 and "OCCASIONE" in w.sent[0] and "S1" in w.sent[0] and "su <b>Unibet</b>" in w.sent[0] and "4,15" in w.sent[0] and "2 (Juventus)" in w.sent[0]
 
     # 2. 15 minuti dopo: niente nuova scansione né doppio avviso
     w.sent = []
@@ -137,19 +138,19 @@ def test_full_flow(w):
     w.books[0] = {"key": "pinnacle", "h2h": [1.95, 3.6, 4.1], "totals": (2.5, 1.8, 2.08)}
     w.books[1] = {"key": "unibet_it", "h2h": [2.0, 3.3, 3.9]}
     cron(w, T0 + 9 * H)
-    assert "PINNACLE HA MOSSO" in "\n".join(w.sent) and "1 (Inter Milan)" in "\n".join(w.sent)
+    assert "PINNACLE SI È MOSSO" in "\n".join(w.sent) and "1 (Inter Milan)" in "\n".join(w.sent)
 
     # 4. super quote
     w.sent = []
     say(w, "Inter vince e over 2,5 @ 4,50", T0 + 10 * H)
-    assert w.odds_calls[-1] == "h2h+totals" and "SÌ, conviene" in w.sent[0] and "[modello]" in w.sent[0]
+    assert w.odds_calls[-1] == "h2h+totals" and "GIOCALA" in w.sent[0] and "🧮" in w.sent[0]
     w.sent = []
     say(w, "Inter vince e over 2.5 @ 2.50", T0 + 10 * H + 360_000)
-    assert "NO, non conviene" in w.sent[0]
+    assert "NON CONVIENE" in w.sent[0]
     assert w.odds_calls.count("h2h+totals") == 1  # quote ancora fresche: nessun credito
     w.sent = []
     say(w, "Lautaro segna e Inter vince @ 3", T0 + 10 * H)
-    assert "Non valutabile" in w.sent[0]
+    assert "NON VALUTABILE" in w.sent[0]
 
     # 5. probabilità
     w.sent = []
@@ -157,16 +158,16 @@ def test_full_flow(w):
     assert "Gol attesi" in w.sent[0] and "Risultati più probabili" in w.sent[0]
     w.sent = []
     say(w, "/prob Juventus vince", T0 + 10 * H)
-    assert "Probabilità <b>2" in w.sent[0] and "[modello]" not in w.sent[0]
+    assert re.search(r"Probabilità\s+2\d,\d%", w.sent[0]) and "🧮" not in w.sent[0]
 
     # 6. giocate e listino
     w.sent = []
     say(w, "/giocata S1 4,15 10", T0 + 10 * H)
     say(w, "/giocata Q1 12", T0 + 10 * H)
-    assert "Registrata <b>B1</b>" in w.sent[0] and "Registrata <b>B2</b>" in w.sent[1]
+    assert "Giocata registrata · B1" in w.sent[0] and "Giocata registrata · B2" in w.sent[1]
     w.sent = []
     say(w, "/listino inter", T0 + 10 * H)
-    assert "Quote minime da cercare" in w.sent[0] and "Inter Milan – Juventus" in w.sent[0]
+    assert "QUOTE MINIME DA CERCARE" in w.sent[0] and "Inter Milan – Juventus" in w.sent[0]
 
     # 7. chiusura 15 minuti prima: una sola chiamata, con gli over/under per la super quota giocata
     w.books[0] = {"key": "pinnacle", "h2h": [2.0, 3.55, 3.5], "totals": (2.5, 1.75, 2.15)}
@@ -180,15 +181,15 @@ def test_full_flow(w):
     w.final, w.sent = (2, 1), []
     cron(w, KICK + 3 * H)
     out = "\n".join(w.sent)
-    assert w.score_calls == 1 and "B1 persa" in out and "B2 vinta" in out and "Inter Milan 2-1 Juventus" in out
+    assert w.score_calls == 1 and "B1 PERSA" in out and "B2 VINTA" in out and "Inter Milan <b>2-1</b> Juventus" in out
     cron(w, KICK + 7 * H)
     assert w.score_calls == 1  # nessuna giocata aperta: nessuna lettura
 
     w.sent = []
     say(w, "/stats", KICK + 8 * H)
     st = w.sent[-1]
-    assert "Giocate: 2 (chiuse 2)" in st and "Profitto: <b>32,00 €</b>" in st  # -10 + 12 x 3,50
-    assert "CLV medio delle tue giocate: <b>+" in st and "rendimento se giocati tutti" in st
+    assert re.search(r"Giocate\s+2 \(chiuse 2\)", st) and re.search(r"Profitto\s+32,00 €", st)  # -10 + 12 x 3,50
+    assert re.search(r"CLV medio\s+\+", st) and re.search(r"Automatici\s+1\s+\+", st)
 
 
 def test_football_data_is_free(w):
@@ -200,7 +201,7 @@ def test_football_data_is_free(w):
     before = w.credits
     cron(w, KICK + 3 * H)
     assert w.fd_calls == 1 and w.score_calls == 0 and w.credits == before
-    assert "B1 vinta" in "\n".join(w.sent) and "+31,50 €" in "\n".join(w.sent)
+    assert "B1 VINTA" in "\n".join(w.sent) and "+31,50 €" in "\n".join(w.sent)
 
 
 def test_credit_budget(w):

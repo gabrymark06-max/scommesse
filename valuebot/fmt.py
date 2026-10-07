@@ -7,6 +7,8 @@ from .config import LEAGUE_NAMES
 esc = html.escape
 
 _DAYS = ["lun", "mar", "mer", "gio", "ven", "sab", "dom"]
+_MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+SEP = "━━━━━━━━━━━━━━━━━━"
 
 
 def num(x, d=2):
@@ -34,7 +36,7 @@ def _rome(ms):
 
 def when(ms):
     t = _rome(ms)
-    return f"{_DAYS[t.weekday()]} {t.day} {t:%H:%M}"
+    return f"{_DAYS[t.weekday()]} {t.day} {_MONTHS[t.month - 1]} · {t:%H:%M}"
 
 
 def match(ev):
@@ -57,3 +59,31 @@ def parse_num(s):
         return float(s.replace(",", "."))
     except ValueError:
         return None
+
+
+def bar(p, width=10):
+    """Barra di probabilità: ███░░░░░░░"""
+    n = max(0, min(width, round(p * width)))
+    return "█" * n + "░" * (width - n)
+
+
+def head(ev):
+    """Intestazione standard di una partita."""
+    return f"⚽ <b>{esc(match(ev))}</b>\n🏆 {esc(league(ev.sport_key))}  ·  🗓 {when(ev.commence)}"
+
+
+def short(name, n=12):
+    return name if len(name) <= n else name[: n - 1] + "…"
+
+
+def table(rows, align=None):
+    """Tabella allineata in un blocco monospazio. align: stringa di 'l'/'r' per colonna."""
+    rows = [[str(c) for c in r] for r in rows]
+    cols = max(len(r) for r in rows)
+    align = (align or "l" * cols).ljust(cols, "l")
+    width = [max(len(r[i]) for r in rows if i < len(r)) for i in range(cols)]
+    lines = []
+    for r in rows:
+        cells = [(c.rjust(width[i]) if align[i] == "r" else c.ljust(width[i])) for i, c in enumerate(r)]
+        lines.append("  ".join(cells).rstrip())
+    return "<pre>" + esc("\n".join(lines)) + "</pre>"

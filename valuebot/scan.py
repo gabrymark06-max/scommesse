@@ -5,7 +5,7 @@ import traceback
 from . import credits, db, sources
 from .config import BOOK_NAMES
 from .fair import kelly_stake
-from .fmt import esc, eur, league, match, num, outcome_label, pct, when
+from .fmt import SEP, esc, eur, head, num, outcome_label, pct, table
 from .pricing import h2h_from, price_leg, totals_from
 from .settle import settle_bets
 from .telegram import send
@@ -133,11 +133,11 @@ def _analyze_event(cfg, con, ev, quotes, now):
             sid = _insert_signal(con, ev.id, o, "auto", book, price, fair_odds, min_odds, now)
             stake = kelly_stake(p, price, bank)
             out.append(
-                f"🟢 <b>OCCASIONE S{sid}</b> — {esc(BOOK_NAMES.get(book, book))} paga <b>{num(price)}</b>\n"
-                f"{esc(match(ev))} · {esc(league(ev.sport_key))} · {when(ev.commence)}\n"
-                f"Esito {esc(outcome_label(ev, o))} · prezzo giusto {num(fair_odds)} · vantaggio <b>{pct(price * p - 1)}</b>\n"
-                f"Puntata: {eur(stake)} (¼ Kelly)\n"
-                f"Se giochi: <code>/giocata S{sid} {num(price)} {num(stake)}</code>")
+                f"🟢 <b>OCCASIONE</b>  <i>S{sid}</i>\n{head(ev)}\n{SEP}\n"
+                f"🎯 Gioca <b>{esc(outcome_label(ev, o))}</b> su <b>{esc(BOOK_NAMES.get(book, book))}</b>\n"
+                + table([["Quota del book", num(price)], ["Quota giusta", num(fair_odds)],
+                         ["Vantaggio", pct(price * p - 1)], ["Puntata", eur(stake)]], "lr")
+                + f"\n➡️ Se giochi: <code>/giocata S{sid} {num(price)} {num(stake)}</code>")
 
         # b) Pinnacle ha accorciato: i book italiani potrebbero essere rimasti indietro
         last_move = con.execute("SELECT fair_odds FROM signals WHERE event_id = ? AND outcome = ? AND kind = 'move' ORDER BY id DESC LIMIT 1",
@@ -146,11 +146,11 @@ def _analyze_event(cfg, con, ev, quotes, now):
         if ref and fair_odds <= ref * (1 - cfg.move_min):
             sid = _insert_signal(con, ev.id, o, "move", None, None, fair_odds, min_odds, now)
             out.append(
-                f"🔔 <b>PINNACLE HA MOSSO S{sid}</b>\n"
-                f"{esc(match(ev))} · {esc(league(ev.sport_key))} · {when(ev.commence)}\n"
-                f"Esito {esc(outcome_label(ev, o))}: prezzo giusto da {num(ref)} a {num(fair_odds)}\n"
-                f"Controlla i book italiani: gioca solo se trovi <b>≥ {num(min_odds)}</b>\n"
-                f"Se giochi: <code>/giocata S{sid} quota puntata</code>")
+                f"🔔 <b>PINNACLE SI È MOSSO</b>  <i>S{sid}</i>\n{head(ev)}\n{SEP}\n"
+                f"📉 <b>{esc(outcome_label(ev, o))}</b>: quota giusta <s>{num(ref)}</s> → <b>{num(fair_odds)}</b>\n"
+                f"<i>I book italiani spesso restano indietro: controllali (es. su diretta.it).</i>\n"
+                f"🎯 Gioca solo se trovi <b>≥ {num(min_odds)}</b>\n"
+                f"➡️ Se giochi: <code>/giocata S{sid} quota puntata</code>")
     return out
 
 
