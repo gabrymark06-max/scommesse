@@ -1,12 +1,12 @@
 import pytest
 
-from bot.fair import devig_power, kelly_stake, overround
-from bot.markets import joint_prob
-from bot.model import fit_model, outcome_probs, over_prob
-from bot.parser import extract_odds, parse_boost
-from bot.pricing import evaluate_boost, h2h_from, price_leg, totals_from
-from bot.sources import find_fd_match, regulation_score
-from bot.teams import EventInfo
+from valuebot.fair import devig_power, kelly_stake, overround
+from valuebot.markets import joint_prob
+from valuebot.model import fit_model, outcome_probs, over_prob
+from valuebot.parser import extract_odds, parse_boost
+from valuebot.pricing import evaluate_boost, h2h_from, price_leg, totals_from
+from valuebot.sources import find_fd_match, regulation_score
+from valuebot.teams import EventInfo
 
 T0 = 1791659100000  # 10 ottobre 2026 18:45 UTC
 EVENTS = [

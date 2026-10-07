@@ -6,7 +6,7 @@ import pytest
 import requests
 
 import app as webapp
-from bot import config, db
+from valuebot import config, db
 
 H = 3600_000
 T0 = int(datetime(2026, 10, 7, 8, 0, tzinfo=timezone.utc).timestamp() * 1000)

@@ -11,10 +11,10 @@ import traceback
 
 from flask import Flask, abort, request
 
-from bot import config, db
-from bot.commands import handle_message
-from bot.scan import run_scheduled
-from bot.telegram import set_webhook
+from valuebot import config, db
+from valuebot.commands import handle_message
+from valuebot.scan import run_scheduled
+from valuebot.telegram import set_webhook
 
 app = Flask(__name__)
 cfg = config.load()

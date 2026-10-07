@@ -71,6 +71,17 @@ Inter vince e over 2,5            probabilità e quota giusta di una giocata
    from app import app as application
    ```
    Poi *Reload*. Flask e requests sono già installati su PythonAnywhere.
+
+   **Se la web app gratuita serve già un altro progetto**, il bot si aggiunge sotto `/scommesse/` senza toccare il resto. In fondo al file WSGI esistente:
+   ```python
+   import importlib.util
+   from werkzeug.middleware.dispatcher import DispatcherMiddleware
+   sys.path.append("/home/TUONOME/scommesse")
+   _spec = importlib.util.spec_from_file_location("scommesse_app", "/home/TUONOME/scommesse/app.py")
+   _mod = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_mod)
+   application = DispatcherMiddleware(application, {"/scommesse": _mod.app})
+   ```
+   In questo caso gli indirizzi sotto diventano `https://TUONOME.pythonanywhere.com/scommesse/...`.
 4. **Collega Telegram**: apri `https://TUONOME.pythonanywhere.com/setup?secret=IL_TUO_SECRET`. Deve comparire `"ok":true`.
 5. **Scheduler**: su GitHub, *Settings → Secrets and variables → Actions*, crea il secret `CRON_URL` con valore `https://TUONOME.pythonanywhere.com/cron?secret=IL_TUO_SECRET`. Il workflow `cron` lo chiama ogni 15 minuti.
 
