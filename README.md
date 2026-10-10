@@ -8,7 +8,9 @@ GitHub inoltra i pronostici a PythonAnywhere tramite POST sullo stesso `CRON_URL
 
 ## Aggiornare l’installazione esistente
 
-Nella console Bash di PythonAnywhere:
+L’installazione attuale su PythonAnywhere è una copia caricata tramite API: per aggiornarla caricare `app.py`, `valuebot/`, `requirements.txt` e `README.md`, preservare `.env` e il database, poi ricaricare la Web app. Sul server bastano Flask e requests già presenti; BeautifulSoup serve soltanto al runner GitHub.
+
+Per un’installazione clonata con Git, nella console Bash di PythonAnywhere:
 
 ```sh
 cd ~/scommesse
