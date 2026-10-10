@@ -95,7 +95,23 @@ def test_telegram_api_rejects_unsuccessful_200(monkeypatch):
             return {'ok': False}
     monkeypatch.setattr(bot.requests, 'post', lambda *a, **kw: Response())
     with pytest.raises(RuntimeError):
-        bot.telegram_api(bot.Config('token'), 'sendMessage', {})
+        bot.telegram_api(bot.Config('token'), 'sendMessage', {'chat_id': 'test', 'text': 'test'})
+
+
+def test_telegram_retries_rate_limit(monkeypatch):
+    replies = [(429, {'ok': False, 'parameters': {'retry_after': 2}}), (200, {'ok': True})]
+    sleeps = []
+    class Response:
+        def __init__(self, status, data):
+            self.status_code, self.data = status, data
+            self.ok = status == 200
+        def json(self):
+            return self.data
+    monkeypatch.setattr(bot.requests, 'post', lambda *a, **kw: Response(*replies.pop(0)))
+    monkeypatch.setattr(bot.time, 'sleep', lambda delay: sleeps.append(delay))
+    assert bot.telegram_api(bot.Config('token'), 'sendMessage', {'chat_id': '-group', 'text': 'test'})['ok']
+    assert 3 in sleeps
+    assert not replies
 
 
 def test_web_auth_cron_and_foreign_chat(tmp_path, monkeypatch):
