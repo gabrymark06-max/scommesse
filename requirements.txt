@@ -1,2 +1,4 @@
 flask>=2.0
 requests>=2.25
+beautifulsoup4>=4.12,<5
+tzdata>=2024.1

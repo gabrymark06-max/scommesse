@@ -1,4 +1,4 @@
-# Chiama /cron del bot ogni 15 minuti (gratis sui repository pubblici).
+# Scraping su GitHub, invio Telegram tramite PythonAnywhere e il secret esistente.
 # L'indirizzo con il segreto sta nel secret CRON_URL del repository, mai nel codice.
 name: cron
 on:
@@ -14,9 +14,14 @@ jobs:
   tick:
     if: github.event.schedule != '0 6 1 * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - run: curl -fsS --max-time 180 "$CRON_URL"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m valuebot.job
         env:
           CRON_URL: ${{ secrets.CRON_URL }}
 
