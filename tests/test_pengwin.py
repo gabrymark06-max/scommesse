@@ -153,3 +153,35 @@ def test_collect_on_runner():
     assert not report['errors']
     assert predictions[0]['text'] == 'Scelgo 2 Handicap (0:4), quota 1.35.'
     assert predictions[0]['kickoff'].endswith('+02:00')
+
+
+def test_rich_prediction_preserves_digest_and_escapes_html(monkeypatch):
+    p = bot.parse_prediction(page('A & B < 3: quota 1.35.'), URL)
+    historical = ('Pronostico MondoPengwin\nINTER-PARMA\nSERIE A · '
+                  '10/10/2026 18:00 (Italia)\n\nA & B < 3: quota 1.35.\n\nFonte: ' + URL)
+    assert p.message().encode() == historical.encode()
+    calls = []
+    monkeypatch.setattr(bot, 'telegram_api', lambda cfg, method, data: calls.append(data))
+    bot.send(bot.Config('token', 'chat'), p.message())
+    assert calls[0]['parse_mode'] == 'HTML'
+    assert '<blockquote>A &amp; B &lt; 3: quota 1.35.</blockquote>' in calls[0]['text']
+    assert URL not in calls[0]['text']
+    assert calls[0]['reply_markup']['inline_keyboard'][0][0]['url'] == URL
+
+
+def test_rich_long_text_keeps_all_content_and_valid_blocks():
+    from html import unescape
+    import re
+    p = bot.parse_prediction(page(), URL)
+    p.text = ('😀 & < > testo originale ' * 300)
+    payloads = p.telegram_payloads(updated=True)
+    assert len(payloads) > 1
+    recovered = ''.join(unescape(re.search(r'<blockquote>(.*?)</blockquote>',
+                                          item['text'], re.S)[1]) for item in payloads)
+    assert recovered == p.text
+    for item in payloads:
+        visible = unescape(re.sub(r'<[^>]+>', '', item['text']))
+        assert len(visible.encode('utf-16-le')) // 2 <= 4096
+        assert item['text'].count('<blockquote>') == item['text'].count('</blockquote>') == 1
+    assert all('reply_markup' not in item for item in payloads[:-1])
+    assert 'reply_markup' in payloads[-1]

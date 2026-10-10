@@ -6,6 +6,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
@@ -77,6 +78,11 @@ def send(cfg, text, chat_id=None):
     target = chat_id or cfg.telegram_chat_id
     if not target:
         raise RuntimeError('TELEGRAM_CHAT_ID mancante')
+    if isinstance(text, PredictionMessage):
+        results = []
+        for payload in text.prediction.telegram_payloads(text.updated):
+            results.append(telegram_api(cfg, 'sendMessage', {'chat_id': target, **payload}))
+        return results
     # Testo semplice: niente errori HTML sui simboli del sito.
     # 1800 code point restano entro 4096 unità UTF-16 anche con emoji.
     parts, current = [], ''
@@ -100,6 +106,28 @@ def send(cfg, text, chat_id=None):
 
 def clean(text):
     return re.sub(r'\s+', ' ', text).strip()
+
+
+class PredictionMessage(str):
+    """Il testo storico resta identico per il digest; la presentazione è separata."""
+    def __new__(cls, text, prediction, updated=False):
+        obj = super().__new__(cls, text)
+        obj.prediction = prediction
+        obj.updated = updated
+        return obj
+
+
+def text_chunks(text, limit=1400):
+    chunks = []
+    while len(text) > limit:
+        end = text.rfind(' ', 0, limit + 1)
+        if end < limit // 2:
+            end = limit
+        chunks.append(text[:end])
+        text = text[end:]
+    if text:
+        chunks.append(text)
+    return chunks
 
 
 def links(html, categories=False):
@@ -127,9 +155,32 @@ class Prediction:
 
     def message(self, updated=False):
         label = 'Pronostico aggiornato' if updated else 'Pronostico MondoPengwin'
-        return (f'{label}\n{self.match}\n{self.league} · '
+        plain = (f'{label}\n{self.match}\n{self.league} · '
                 f'{self.kickoff:%d/%m/%Y %H:%M} (Italia)\n\n'
                 f'{self.text}\n\nFonte: {self.url}')
+        return PredictionMessage(plain, self, updated)
+
+    def telegram_payloads(self, updated=False):
+        months = 'gen feb mar apr mag giu lug ago set ott nov dic'.split()
+        kickoff = self.kickoff.astimezone(ROME)
+        date = f'{kickoff.day} {months[kickoff.month - 1]} {kickoff.year} · {kickoff:%H:%M}'
+        title = escape(self.match.replace('-', ' — '))
+        meta = escape(f'{self.league} · {date}')
+        chunks = text_chunks(self.text)
+        payloads = []
+        for index, chunk in enumerate(chunks):
+            section = 'Il pronostico' if index == 0 else f'Il pronostico · {index + 1}/{len(chunks)}'
+            update = '<b>↻ Pronostico aggiornato</b>\n\n' if updated and index == 0 else ''
+            body = (f'{update}⚽ <b>{title}</b>\n<i>{meta}</i>\n\n'
+                    f'<b>{section}</b>\n<blockquote>{escape(chunk)}</blockquote>')
+            payload = {'text': body, 'parse_mode': 'HTML', 'disable_web_page_preview': True}
+            if index == len(chunks) - 1:
+                payload['text'] += '\n\n<i>MondoPengwin · Testo originale</i>'
+                payload['reply_markup'] = {'inline_keyboard': [[{
+                    'text': 'Leggi l’analisi completa ↗', 'url': self.url,
+                }]]}
+            payloads.append(payload)
+        return payloads
 
 
 def parse_prediction(html, url):
