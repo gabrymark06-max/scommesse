@@ -2,6 +2,8 @@ import hashlib
 import os
 import re
 import sqlite3
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +20,8 @@ BASE = 'https://www.mondopengwin.it'
 INDEX = BASE + '/pronostici/calcio/'
 ROME = ZoneInfo('Europe/Rome')
 MONTHS = dict(zip('GEN FEB MAR APR MAG GIU LUG AGO SET OTT NOV DIC'.split(), range(1, 13)))
+_send_lock = threading.Lock()
+_last_send = {}
 
 
 @dataclass
@@ -43,13 +47,28 @@ def load():
 def telegram_api(cfg, method, payload):
     if not cfg.telegram_token:
         raise RuntimeError('TELEGRAM_TOKEN mancante')
-    try:
-        response = requests.post(f'https://api.telegram.org/bot{cfg.telegram_token}/{method}',
-                                 json=payload, timeout=20)
-        data = response.json()
-    except (requests.RequestException, ValueError):
-        # L'eccezione requests può contenere il token nell'URL.
-        raise RuntimeError('Telegram non raggiungibile') from None
+    for attempt in range(3):
+        if method == 'sendMessage':
+            target = str(payload['chat_id'])
+            interval = 3.1 if target.startswith('-') else 1.05
+            with _send_lock:
+                delay = interval - (time.monotonic() - _last_send.get(target, 0))
+                if delay > 0:
+                    time.sleep(delay)
+                _last_send[target] = time.monotonic()
+        try:
+            response = requests.post(f'https://api.telegram.org/bot{cfg.telegram_token}/{method}',
+                                     json=payload, timeout=20)
+            data = response.json()
+        except (requests.RequestException, ValueError):
+            # L'eccezione requests può contenere il token nell'URL.
+            raise RuntimeError('Telegram non raggiungibile') from None
+        if response.status_code == 429 and attempt < 2:
+            delay = data.get('parameters', {}).get('retry_after', 1)
+            if isinstance(delay, (int, float)) and 0 < delay <= 60:
+                time.sleep(delay + 1)
+                continue
+        break
     if not response.ok or not data.get('ok'):
         raise RuntimeError(f'Telegram: richiesta fallita (HTTP {response.status_code})')
     return data
