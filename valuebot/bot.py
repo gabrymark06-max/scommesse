@@ -11,7 +11,6 @@ from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -104,6 +103,7 @@ def clean(text):
 
 
 def links(html, categories=False):
+    from bs4 import BeautifulSoup
     found = set()
     for anchor in BeautifulSoup(html, 'html.parser').select('a[href]'):
         parsed = urlparse(urljoin(INDEX, anchor['href']))
@@ -133,6 +133,7 @@ class Prediction:
 
 
 def parse_prediction(html, url):
+    from bs4 import BeautifulSoup
     content = BeautifulSoup(html, 'html.parser').select_one('#pengwincontent')
     if content is None:
         raise ValueError('Scheda partita assente')
@@ -259,12 +260,17 @@ def deliver(cfg, con, predictions, now=None, sender=send):
     if not isinstance(predictions, list) or len(predictions) > 300:
         raise ValueError('Elenco pronostici non valido')
     pages = {}
-    from html import escape
     for data in predictions:
         if not isinstance(data, dict):
             raise ValueError('Scheda non valida')
         url = data.get('url', '')
-        if not isinstance(url, str) or links(f'<a href="{escape(url)}"></a>') != [url]:
+        if not isinstance(url, str):
+            raise ValueError('Fonte non valida')
+        parsed = urlparse(url)
+        segments = parsed.path.strip('/').split('/')
+        if (parsed.scheme != 'https' or parsed.netloc != 'www.mondopengwin.it'
+                or len(segments) != 4 or segments[:2] != ['pronostici', 'calcio']
+                or segments[-1].startswith('pagina-') or parsed.query or parsed.fragment):
             raise ValueError('Fonte non valida')
         values = [data.get(k) for k in ('match', 'league', 'kickoff', 'text')]
         if not all(isinstance(v, str) and v.strip() and len(v) < 30000 for v in values):
