@@ -193,12 +193,26 @@ class Scraper:
         return response.text
 
     def discover(self):
-        index = self.get(INDEX)
-        categories = links(index, categories=True)
-        if not categories:
-            raise ValueError('Nessun campionato trovato: struttura del sito cambiata')
-        articles = set(links(index))
+        # Il sito può restituire temporaneamente una pagina vuota/intermedia
+        # anche con HTTP 200. La home contiene lo stesso menu dei campionati.
+        categories = []
+        articles = set()
         errors = []
+        for attempt in range(3):
+            for url in (INDEX, BASE + '/'):
+                try:
+                    index = self.get(url)
+                    categories = links(index, categories=True)
+                    articles.update(links(index))
+                except RuntimeError:
+                    continue
+                if categories:
+                    break
+            if categories:
+                break
+            time.sleep(2 * (attempt + 1))
+        if not categories:
+            raise ValueError('Nessun campionato leggibile: sito non disponibile o struttura cambiata')
         for category in categories:
             try:
                 articles.update(links(self.get(category)))
